@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Goblin Battle</title>
+
+  <!-- Bootstrap CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+  />
+  
+  <!-- Google Fonts -->
+  <link
+    rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap"
+  />
+  
+  <!-- Font Awesome for Icons (Trophy, Skull, etc.) -->
+  <script
+    src="https://kit.fontawesome.com/your_kit_id.js"
+    crossorigin="anonymous"
+  ></script>
+  
+  <style>
+    /* Body Background & Typography */
+    body {
+      background: linear-gradient(to bottom, #1d1d1d, #333);
+      color: #c1ff72;
+      font-family: 'Roboto', sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Headings */
+    h1, h2, h3 {
+      text-align: center;
+      color: #76c442;
+      text-shadow: 2px 2px 4px #000;
+    }
+
+    /* Sparkle Animation */
+    @keyframes sparkle {
+      0%, 100% {
+        text-shadow:
+          0 0 5px #fff,
+          0 0 10px #ff00ff,
+          0 0 15px #ff00ff,
+          0 0 20px #ff00ff;
+      }
+      50% {
+        text-shadow:
+          0 0 10px #fff,
+          0 0 20px #ff00ff,
+          0 0 30px #ff00ff,
+          0 0 40px #ff00ff;
+      }
+    }
+    .sparkle {
+      animation: sparkle 2s infinite;
+      font-size: 2rem;
+      font-weight: bold;
+      color: #c1ff72;
+      text-shadow:
+        0 0 5px #fff,
+        0 0 10px #ff00ff,
+        0 0 15px #ff00ff,
+        0 0 20px #ff00ff;
+    }
+
+    /* Extra Hover Effects */
+    table.table-hover tbody tr:hover {
+      background-color: #444 !important;
+    }
+
+    /* Search Box Styling */
+    #searchInput {
+      max-width: 300px;
+      margin: 0 auto 20px auto;
+      display: block;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container my-5">
+    <h1 class="mb-4">Welcome to the Goblin Battle Arena!</h1>
+
+    <!-- Leaderboard Section -->
+    <div class="card bg-dark border-success mb-4">
+      <div class="card-header text-center border-success">
+        <h3>Leaderboard</h3>
+        <!-- Search/Filter Input -->
+        <input
+          type="text"
+          id="searchInput"
+          class="form-control mt-3"
+          placeholder="Search by rank or player..."
+          onkeyup="filterLeaderboard()"
+        />
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table
+            class="table table-dark table-hover table-bordered mb-0"
+            id="leaderboardTable"
+          >
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th><i class="fas fa-trophy"></i> Wins</th>
+                <th><i class="fas fa-skull"></i> Losses</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in leaderboard %}
+              <tr>
+                <td>{{ entry.rank }}</td>
+                <td>{{ entry.player }}</td>
+                <td><i class="fas fa-trophy"></i> {{ entry.stats.wins }}</td>
+                <td><i class="fas fa-skull"></i> {{ entry.stats.losses }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ongoing Battles -->
+    <div class="card bg-dark border-success mb-4">
+      <div class="card-header text-center border-success">
+        <h3>Ongoing Battles</h3>
+      </div>
+      <ul class="list-group list-group-flush">
+        {% for battle in ongoing_battles %}
+        <li class="list-group-item bg-dark text-center text-light">
+          <div class="sparkle">
+            {{ battle['player1'] }} vs {{ battle['player2'] }}
+          </div>
+          <div style="font-size: 1rem; color: #76c442; margin-top: 10px;">
+            On machines: {{ battle['machine_names'] }}
+          </div>
+        </li>
+        {% endfor %}
+        {% if not ongoing_battles %}
+        <li class="list-group-item bg-dark text-center text-light">
+          No ongoing battles at the moment.
+        </li>
+        {% endif %}
+      </ul>
+    </div>
+
+    <!-- Recent Battles -->
+    <div class="card bg-dark border-success mb-4">
+      <div class="card-header text-center border-success">
+        <h3>Recent Battles</h3>
+        <!-- New Controls for Filtering & Number of Battles -->
+        <div class="d-flex justify-content-center mt-3">
+          <!-- Filter by player name (winner or loser) -->
+          <input
+            type="text"
+            id="battleSearchInput"
+            class="form-control w-25 me-2"
+            placeholder="Filter by player..."
+            onkeyup="filterRecentBattles()"
+          />
+          <!-- Change the number of battles displayed -->
+          <input
+            type="number"
+            id="battleCount"
+            class="form-control w-25"
+            min="1"
+            value="5"
+            oninput="filterRecentBattles()"
+          />
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table
+            class="table table-dark table-hover table-bordered mb-0"
+            id="recentBattlesTable"
+          >
+            <thead>
+              <tr>
+                <th>Winner</th>
+                <th>Loser</th>
+                <th>Time</th>
+                <th>Machines Played</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for battle in battle_history %}
+              <tr>
+                <td>{{ battle['winner'] }}</td>
+                <td>{{ battle['loser'] }}</td>
+                <td>{{ battle['time'] }}</td>
+                <td>{{ battle['machine_names'] }}</td>
+              </tr>
+              {% endfor %}
+              {% if not battle_history %}
+              <tr>
+                <td colspan="4" class="text-center">
+                  No recent battles found.
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Monthly Table -->
+    <div class="card bg-dark border-success">
+      <div class="card-header text-center border-success">
+        <h3>This Month's Table: {{ machine_of_the_month }}</h3>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-dark table-hover table-bordered mb-0">
+            <thead>
+              <tr>
+                <th>Rank</th>
+                <th>Player</th>
+                <th>Score</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for entry in monthly_scores %}
+              <tr>
+                <td>{{ entry.rank }}</td>
+                <td>{{ entry.player }}</td>
+                <td>{{ "{:,}".format(entry.score) }}</td>
+              </tr>
+              {% endfor %}
+              {% if not monthly_scores %}
+              <tr>
+                <td colspan="3" class="text-center">
+                  No high scores submitted yet.
+                </td>
+              </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Socket.io -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.1/socket.io.min.js"></script>
+  <!-- Bootstrap JS (Optional if you need Bootstrap's JS components) -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"
+  ></script>
+
+  <script>
+    const socket = io();
+    // Listen for refresh events
+    socket.on('refresh', () => {
+      location.reload(); // Reload the page
+    });
+
+    // Simple client-side filter for Leaderboard
+    function filterLeaderboard() {
+      let input = document.getElementById('searchInput');
+      let filter = input.value.toUpperCase();
+      let table = document.getElementById('leaderboardTable');
+      let tr = table.getElementsByTagName('tr');
+
+      // Skip the header (i=0)
+      for (let i = 1; i < tr.length; i++) {
+        let tdRank = tr[i].getElementsByTagName('td')[0];
+        let tdPlayer = tr[i].getElementsByTagName('td')[1];
+        if (tdRank && tdPlayer) {
+          let rankText = tdRank.textContent || tdRank.innerText;
+          let playerText = tdPlayer.textContent || tdPlayer.innerText;
+
+          if (
+            rankText.toUpperCase().indexOf(filter) > -1 ||
+            playerText.toUpperCase().indexOf(filter) > -1
+          ) {
+            tr[i].style.display = '';
+          } else {
+            tr[i].style.display = 'none';
+          }
+        }
+      }
+    }
+
+    // Filter & limit the Recent Battles
+    function filterRecentBattles() {
+      let searchInput = document.getElementById('battleSearchInput');
+      let filter = searchInput.value.toUpperCase();
+
+      let table = document.getElementById('recentBattlesTable');
+      let tr = table.getElementsByTagName('tr');
+
+      let maxCount = parseInt(document.getElementById('battleCount').value) || 5;
+      let visibleCount = 0;
+
+      // Skip the header (i=0)
+      for (let i = 1; i < tr.length; i++) {
+        let tdWinner = tr[i].getElementsByTagName('td')[0];
+        let tdLoser  = tr[i].getElementsByTagName('td')[1];
+
+        // If there's a "No recent battles found." row, handle it separately
+        // that row might have colspan="4"
+        if (!tdLoser) {
+          // Probably the "No recent battles" row
+          tr[i].style.display = 'none';
+          continue;
+        }
+
+        let winnerText = tdWinner.textContent || tdWinner.innerText;
+        let loserText  = tdLoser.textContent  || tdLoser.innerText;
+
+        // Check if row matches the filter and we haven't reached maxCount
+        if (
+          (winnerText.toUpperCase().indexOf(filter) > -1 ||
+           loserText.toUpperCase().indexOf(filter) > -1) &&
+           visibleCount < maxCount
+        ) {
+          tr[i].style.display = '';
+          visibleCount++;
+        } else {
+          tr[i].style.display = 'none';
+        }
+      }
+    }
+
+    // Run once on page load (so the table is limited to 5 by default)
+    document.addEventListener('DOMContentLoaded', () => {
+      filterRecentBattles();
+    });
+  </script>
+</body>
+</html>
