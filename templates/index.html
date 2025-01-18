@@ -32,14 +32,14 @@
       margin: 0;
       padding: 0;
     }
-
+  
     /* Headings */
     h1, h2, h3 {
       text-align: center;
       color: #76c442;
       text-shadow: 2px 2px 4px #000;
     }
-
+  
     /* Sparkle Animation */
     @keyframes sparkle {
       0%, 100% {
@@ -57,6 +57,7 @@
           0 0 40px #ff00ff;
       }
     }
+  
     .sparkle {
       animation: sparkle 2s infinite;
       font-size: 2rem;
@@ -68,20 +69,66 @@
         0 0 15px #ff00ff,
         0 0 20px #ff00ff;
     }
-
+  
     /* Extra Hover Effects */
     table.table-hover tbody tr:hover {
       background-color: #444 !important;
     }
-
+  
     /* Search Box Styling */
-    #searchInput {
-      max-width: 300px;
-      margin: 0 auto 20px auto;
-      display: block;
-      text-align: center;
+    #searchInput,
+    #leaderboardTypeSelect {
+      width: 25%; /* Matches the size of Recent Battles inputs */
     }
-  </style>
+  
+    #searchInput {
+      margin-right: 1rem; /* Consistent spacing between inputs */
+    }
+  
+    /* Responsive Alignment for Leaderboard Filters */
+    .leaderboard-filters {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-top: 1rem;
+    }
+  
+    /* Adjustments for Consistency */
+    .card-header {
+      text-align: center;
+      border-bottom: 1px solid #76c442;
+    }
+  
+    .card {
+      background-color: #1d1d1d;
+      border: 1px solid #76c442;
+      margin-bottom: 1.5rem;
+    }
+  
+    .list-group-item {
+      background-color: #1d1d1d;
+      color: #c1ff72;
+      border: none;
+    }
+  
+    .list-group-item.bg-dark:hover {
+      background-color: #444;
+    }
+  
+    /* Table Styling */
+    .table-dark {
+      color: #c1ff72;
+    }
+  
+    .table-dark th {
+      background-color: #333;
+      color: #76c442;
+    }
+  
+    .table-dark td {
+      background-color: #222;
+    }
+  </style>  
 </head>
 
 <body>
@@ -92,15 +139,24 @@
     <div class="card bg-dark border-success mb-4">
       <div class="card-header text-center border-success">
         <h3>Leaderboard</h3>
-        <!-- Search/Filter Input -->
-        <input
-          type="text"
-          id="searchInput"
-          class="form-control mt-3"
-          placeholder="Search by rank or player..."
-          onkeyup="filterLeaderboard()"
-        />
+        <div class="d-flex justify-content-center mt-3">
+          <input
+              type="text"
+              id="searchInput"
+              class="form-control w-25 me-2"
+              placeholder="Search by rank or player..."
+              onkeyup="filterLeaderboard()"
+          />
+          <select 
+              id="leaderboardTypeSelect" 
+              class="form-control w-25"
+          >
+              <option value="all_time">All-Time Stats</option>
+              <option value="current_month">Current Month Stats</option>
+          </select>
       </div>
+      
+    </div>
       <div class="card-body">
         <div class="table-responsive">
           <table
@@ -334,10 +390,30 @@
       }
     }
 
+    // Leaderboard type selection
+    document.addEventListener('DOMContentLoaded', () => {
+      // Get the leaderboard type from the URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const leaderboardType = urlParams.get('leaderboard_type');
+      
+      if (leaderboardType) {
+        const selectElement = document.getElementById('leaderboardTypeSelect');
+        selectElement.value = leaderboardType;
+      }
+
+      function updateLeaderboardType() {
+        const selectedType = document.getElementById('leaderboardTypeSelect').value;
+        window.location.href = `/?leaderboard_type=${selectedType}`;
+      }
+
+      // Attach the event listener
+      document.getElementById('leaderboardTypeSelect').addEventListener('change', updateLeaderboardType);
+    });
+
     // Run once on page load (so the table is limited to 5 by default)
     document.addEventListener('DOMContentLoaded', () => {
       filterRecentBattles();
     });
-  </script>
+</script>
 </body>
 </html>
