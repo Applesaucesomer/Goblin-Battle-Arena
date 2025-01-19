@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO
 import random
@@ -484,10 +485,14 @@ if __name__ == '__main__':
 
     # Run Flask app with SocketIO in a separate thread
     def run_flask():
-        socketio.run(app, debug=True, use_reloader=False)
+        socketio.run(app, debug=False, use_reloader=False)
 
     flask_thread = Thread(target=run_flask)
     flask_thread.start()
 
     # Run Discord bot
-    bot.run('YOUR SECRET KEY)
+    # Discord Bot Configuration
+    TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Fetch the token from an environment variable
+    if not TOKEN:
+        raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
+    bot.run(TOKEN)
