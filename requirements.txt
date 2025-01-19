@@ -6,3 +6,4 @@ python-dotenv==1.0.0  # Optional, for environment variable management (if needed
 
 # Additional dependencies for Python features
 typing-extensions==4.7.1  # For extended typing support, if needed
+gunicorn
