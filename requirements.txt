@@ -1,0 +1,9 @@
+Flask==2.3.2
+flask-socketio==5.3.4
+eventlet==0.33.3  # Required for flask-socketio to work properly
+discord.py==2.3.2
+sqlite3  # Built-in with Python, no installation needed
+python-dotenv==1.0.0  # Optional, for environment variable management (if needed)
+
+# Additional dependencies for Python features
+typing-extensions==4.7.1  # For extended typing support, if needed
