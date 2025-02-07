@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Manage Machines</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <style>
+        .inactive-row {
+            opacity: 0.7;
+            font-style: italic;
+        }
+        .status-badge {
+            padding: 0.25em 0.6em;
+            border-radius: 12px;
+            font-size: 0.85em;
+        }
+        .status-active {
+            background-color: #198754;
+            color: white;
+        }
+        .status-inactive {
+            background-color: #dc3545;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container my-5">
+        <h2>Manage Machines</h2>
+        <form id="machineForm">
+            <div class="mb-3">
+                <label for="machineName" class="form-label">Machine Name</label>
+                <input type="text" id="machineName" class="form-control" required>
+            </div>
+            <div class="mb-3">
+                <label for="machineTags" class="form-label">Tags (comma-separated)</label>
+                <input type="text" id="machineTags" class="form-control">
+            </div>
+            <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="machineActive" checked>
+                <label class="form-check-label" for="machineActive">Active</label>
+            </div>
+            <button type="button" id="addMachine" class="btn btn-primary">Add Machine</button>
+        </form>
+
+        <div class="d-flex justify-content-between align-items-center mt-5 mb-3">
+            <h3>Machines</h3>
+            <div class="btn-group" role="group">
+                <input type="radio" class="btn-check" name="filter" id="showAll" checked>
+                <label class="btn btn-outline-primary" for="showAll">All</label>
+
+                <input type="radio" class="btn-check" name="filter" id="showActive">
+                <label class="btn btn-outline-primary" for="showActive">Active Only</label>
+
+                <input type="radio" class="btn-check" name="filter" id="showInactive">
+                <label class="btn btn-outline-primary" for="showInactive">Inactive Only</label>
+            </div>
+        </div>
+        
+        <table class="table table-dark table-hover">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Status</th>
+                    <th>Tags</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="machineTable"></tbody>
+        </table>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Edit Machine</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editForm">
+                        <input type="hidden" id="editMachineId">
+                        <div class="mb-3">
+                            <label for="editMachineName" class="form-label">Machine Name</label>
+                            <input type="text" id="editMachineName" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="editMachineTags" class="form-label">Tags (comma-separated)</label>
+                            <input type="text" id="editMachineTags" class="form-control">
+                        </div>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="editMachineActive">
+                            <label class="form-check-label" for="editMachineActive">Active</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="saveEdit">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const editModal = new bootstrap.Modal(document.getElementById('editModal'));
+        let allMachines = [];
+        
+        async function fetchMachines() {
+            const response = await fetch('/admin/machines');
+            allMachines = await response.json();
+            displayMachines();
+        }
+
+        function displayMachines() {
+            const table = document.getElementById('machineTable');
+            table.innerHTML = '';
+            
+            // Get selected filter
+            const filter = document.querySelector('input[name="filter"]:checked').id;
+            
+            // Filter machines based on selection
+            let machines = allMachines;
+            if (filter === 'showActive') {
+                machines = allMachines.filter(m => m.active);
+            } else if (filter === 'showInactive') {
+                machines = allMachines.filter(m => !m.active);
+            }
+
+            machines.forEach(machine => {
+                const row = document.createElement('tr');
+                if (!machine.active) {
+                    row.classList.add('inactive-row');
+                }
+                row.innerHTML = `
+                    <td>${machine.name}</td>
+                    <td>
+                        <span class="status-badge ${machine.active ? 'status-active' : 'status-inactive'}">
+                            ${machine.active ? 'Active' : 'Inactive'}
+                        </span>
+                    </td>
+                    <td>${machine.tags ? machine.tags.join(', ') : ''}</td>
+                    <td>
+                        <button class="btn btn-sm btn-warning" onclick="editMachine(${JSON.stringify(machine).replace(/"/g, '&quot;')})">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteMachine(${machine.id})">Delete</button>
+                    </td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        document.getElementById('addMachine').addEventListener('click', async () => {
+            const name = document.getElementById('machineName').value;
+            const tags = document.getElementById('machineTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+            const active = document.getElementById('machineActive').checked;
+
+            await fetch('/admin/machines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'add', name, tags, active }),
+            });
+            document.getElementById('machineForm').reset();
+            fetchMachines();
+        });
+
+        async function deleteMachine(machineId) {
+            if (confirm('Are you sure you want to delete this machine?')) {
+                await fetch('/admin/machines', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'delete', id: machineId }),
+                });
+                fetchMachines();
+            }
+        }
+
+        function editMachine(machine) {
+            document.getElementById('editMachineId').value = machine.id;
+            document.getElementById('editMachineName').value = machine.name;
+            document.getElementById('editMachineTags').value = machine.tags ? machine.tags.join(', ') : '';
+            document.getElementById('editMachineActive').checked = machine.active;
+            editModal.show();
+        }
+
+        document.getElementById('saveEdit').addEventListener('click', async () => {
+            const id = document.getElementById('editMachineId').value;
+            const name = document.getElementById('editMachineName').value;
+            const tags = document.getElementById('editMachineTags').value.split(',').map(tag => tag.trim()).filter(tag => tag);
+            const active = document.getElementById('editMachineActive').checked;
+
+            await fetch('/admin/machines', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    action: 'update',
+                    id,
+                    name,
+                    active,
+                    tags
+                }),
+            });
+            editModal.hide();
+            fetchMachines();
+        });
+
+        // Add event listeners for filter buttons
+        document.querySelectorAll('input[name="filter"]').forEach(radio => {
+            radio.addEventListener('change', displayMachines);
+        });
+
+        fetchMachines();
+    </script>
+</body>
+</html>

@@ -1,9 +1,12 @@
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO
+from admin import admin_bp
 import random
+import os
 import discord
 from discord.ext import commands
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from dataclasses import dataclass
 from typing import List, Dict, Optional
 
@@ -14,9 +17,13 @@ from db_utils import DBHelper
 # Flask App Setup
 app = Flask(__name__)
 socketio = SocketIO(app)
-
+app.register_blueprint(admin_bp, url_prefix='/admin')
 # TPG 01/18/25 - Replaced the json files with a new sql-lite database
 db = DBHelper('goblin_battle.db')
+
+def get_eastern_time():
+    # This automatically handles DST transitions
+    return datetime.now(ZoneInfo("America/New_York"))
 
 # Prevent caching
 @app.after_request
@@ -40,7 +47,7 @@ class Battle:
     channel_id: int
     battle_id: str
     resolved: bool = False
-    time_started: str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    time_started: str = get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')
 
     @classmethod
     def generate_id(cls):
@@ -106,6 +113,10 @@ def home():
 
     # Dynamically get ongoing battles and recent battles
     recent_battles = db.load_battle_history()[:30]
+    
+    for battle in recent_battles:
+        time = datetime.fromisoformat(battle['time'])
+        battle['time'] = time.strftime('%m/%d/%Y %I:%M %p')
 
     # Get active battles from Discord bot's battle manager
     ongoing_battles = bot.battle_manager.get_all_active_battles()
@@ -225,26 +236,97 @@ async def goblinbattle(ctx, opponent: discord.Member):
     socketio.emit('refresh', {'message': 'New battle initiated'})
     
 def transform_for_theme_filter(machine):
+    try:
+        # Convert to strings for any potential integer/null values
+        return {
+            "name": str(machine['name']) if machine['name'] else "",
+            "details": {
+                "release_date": str(machine['release_date']) if machine['release_date'] else "",
+                "ramps": int(machine['ramps']) if machine['ramps'] else 0,
+                "multiball": int(machine['multiball']) if machine['multiball'] else 0,
+                "display_type": str(machine['display_type']) if machine['display_type'] else "",
+                "type": str(machine['type']) if machine['type'] else "",
+                "flippers": int(machine['flippers']) if machine['flippers'] else 0,
+                "manufacturer": str(machine['manufacturer']) if machine['manufacturer'] else "",
+                "generation": str(machine['generation']) if machine['generation'] else "",
+                "cabinet": str(machine['cabinet']) if machine['cabinet'] else "",
+                "release_count": int(machine['release_count']) if machine['release_count'] else 0
+            },
+            "tags": machine['tags'] if isinstance(machine['tags'], list) else [],
+            "active": bool(machine['active'])
+        }
+    except (KeyError, TypeError, ValueError) as e:
+        print(f"Error transforming machine {machine.get('name', 'Unknown')}: {str(e)}")
+        # Return a safe default structure if transformation fails
+        return {
+            "name": "",
+            "details": {
+                "release_date": "", "ramps": 0, "multiball": 0,
+                "display_type": "", "type": "", "flippers": 0,
+                "manufacturer": "", "generation": "", "cabinet": "",
+                "release_count": 0
+            },
+            "tags": [],
+            "active": False
+        }
+    
+@bot.command()
+async def guestbattle(ctx, *, guest_name: str):
     """
-    Transform a machine dictionary to match the structure expected by themes.py
+    Usage: !guestbattle GuestName
+    This initiates a battle between the command invoker and a guest (non-Discord user).
     """
-    return {
-        "name": machine['name'],
-        "details": {
-            "release_date": machine['release_date'],
-            "ramps": machine['ramps'],
-            "multiball": machine['multiball'],
-            "display_type": machine['display_type'],
-            "type": machine['type'],
-            "flippers": machine['flippers'],
-            "manufacturer": machine['manufacturer'],
-            "generation": machine['generation'],
-            "cabinet": machine['cabinet'],
-            "release_count": machine['release_count']
-        },
-        "tags": machine['tags'],
-        "active": machine['active']
-    }
+    player1 = ctx.author
+    player2_name = guest_name.strip()  # Remove any extra whitespace
+
+    if player1.display_name.lower() == player2_name.lower():
+        await ctx.send("You cannot battle against yourself.")
+        return
+    
+    active_machines = [m['name'] for m in db.load_machines() if m.get('active', False)]
+    if len(active_machines) < 3:
+        await ctx.send("There are fewer than 3 active machines available. Cannot start a battle.")
+        return
+
+    selected_machines = random.sample(active_machines, 3)
+    selected_machine_details = [get_machine_details(name) for name in selected_machines]
+
+    # Construct the battle initiation message
+    message = f"**GUEST BATTLE INITIATED**\n\nMachines:\n"
+    for i, machine in enumerate(selected_machine_details, 1):
+        message += f"{i}. {machine['name']} ({', '.join(machine['tags'])})\n"
+    message += f"\nOnly the battle initiator can report the winner."
+
+    view = discord.ui.View()
+    view.add_item(
+        discord.ui.Button(
+            label=f"{player1.display_name} Wins", 
+            style=discord.ButtonStyle.success, 
+            custom_id=f"player1_wins:{player1.id}:guest"
+        )
+    )
+    view.add_item(
+        discord.ui.Button(
+            label=f"{player2_name} Wins", 
+            style=discord.ButtonStyle.success, 
+            custom_id=f"player2_wins:{player1.id}:guest"
+        )
+    )
+
+    # Send message and get the message object back
+    battle_message = await ctx.send(message, view=view)
+
+    # Create battle in the manager
+    battle = bot.battle_manager.create_battle(
+        player1=player1.display_name,
+        player2=player2_name,
+        machines=selected_machine_details,
+        message_id=battle_message.id,
+        channel_id=ctx.channel.id
+    )
+
+    # Emit refresh event
+    socketio.emit('refresh', {'message': 'New guest battle initiated'})
 
 @bot.command()
 async def themebattle(ctx, opponent: discord.Member):
@@ -277,8 +359,12 @@ async def themebattle(ctx, opponent: discord.Member):
         
         # Transform machines to match theme filter expectations
         transformed_machines = [transform_for_theme_filter(m) for m in machines]
-        filtered = [m for m in transformed_machines if m['name'] in active_machines and theme_filter(m)]
-
+        try:
+            filtered = [m for m in transformed_machines if m['name'] in active_machines and theme_filter(m)]
+        except (TypeError, KeyError) as e:
+            print(f"Error during theme filtering: {str(e)}")
+            filtered = []
+            
         if len(filtered) >= 3:
             selected_theme_name = theme_name
             # Get the original machine details using the filtered names
@@ -379,6 +465,27 @@ async def monthly(ctx, score: int):
     socketio.emit('refresh', {'message': 'Monthly scoreboard updated'})
 
 @bot.command()
+async def commands(ctx):
+    """
+    Usage: !commands
+    Shows all available commands and their descriptions.
+    """
+    help_text = """**Available Commands**
+
+**Battle Commands**
+`!goblinbattle @opponent` - Start a battle against another player with 3 random machines
+`!themebattle @opponent` - Start a themed battle with machines matching a random theme
+`!guestbattle GuestName` - Start a battle against someone not on Discord. Please encourage the guest to join the Goblins!
+
+**Stats & Info**
+`!leaderboard` - Show the current win/loss rankings
+`!ongoing` - Display all active battles
+`!monthly [score]` - Submit your score for the current Machine of the Month"""
+
+    # Send as ephemeral message (only visible to command invoker)
+    await ctx.send(help_text, ephemeral=True)
+
+@bot.command()
 async def resetmonth(ctx):
     """
     Usage: !resetmonth
@@ -468,7 +575,7 @@ async def on_interaction(interaction):
     await original_message.edit(view=updated_view)
 
     # Save battle to database with current time
-    completion_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    completion_time = get_eastern_time().strftime('%Y-%m-%d %H:%M:%S')
     db.save_battle(winner, loser, battle.machines, completion_time)
 
     # Emit refresh event
@@ -484,10 +591,22 @@ if __name__ == '__main__':
 
     # Run Flask app with SocketIO in a separate thread
     def run_flask():
-        socketio.run(app, debug=True, use_reloader=False)
+        # Modified to bind to all interfaces and use the PORT environment variable
+        port = int(os.environ.get("PORT", 5000))
+        socketio.run(
+            app,
+            host='0.0.0.0',  # Bind to all interfaces
+            port=port,
+            debug=False,  # Set to False in production
+            use_reloader=False,
+            allow_unsafe_werkzeug=True,  # Required for production with Werkzeug
+        )
 
     flask_thread = Thread(target=run_flask)
     flask_thread.start()
 
     # Run Discord bot
-    bot.run('YOUR SECRET KEY)
+    TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Fetch the token from an environment variable
+    if not TOKEN:
+        raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
+    bot.run(TOKEN)

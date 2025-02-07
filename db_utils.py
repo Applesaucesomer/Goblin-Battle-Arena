@@ -1,13 +1,17 @@
 import sqlite3
-from datetime import datetime
+import os
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import List, Dict, Optional, Tuple
 
 class DBHelper:
     def __init__(self, db_path: str = 'goblin_battle.db'):
-        self.db_path = db_path
+        # Ensure the path is absolute
+        self.db_path = os.path.join(os.path.dirname(__file__), db_path)
 
     def get_connection(self):
         return sqlite3.connect(self.db_path)
+
 
     def load_machines(self) -> List[Dict]:
         """Load all active machines with their tags and IDs"""
@@ -23,6 +27,32 @@ class DBHelper:
                 LEFT JOIN tags t ON mt.tag_id = t.id
                 WHERE m.active = true
                 GROUP BY m.id
+            ''')
+
+            columns = [desc[0] for desc in cursor.description]
+            machines = []
+            for row in cursor.fetchall():
+                machine_dict = dict(zip(columns, row))
+                # Split tags and remove any empty strings
+                machine_dict['tags'] = [tag.strip() for tag in machine_dict['tags'].split(',') if tag.strip()] if machine_dict['tags'] else []
+                machines.append(machine_dict)
+            return machines
+        
+    #Routine specfically for admin of machines    
+    def load_all_machines(self) -> List[Dict]:
+        """Load all machines (active and inactive) with their tags and IDs"""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT m.id, m.name, GROUP_CONCAT(t.name) as tags, m.active, m.pinside_id, m.manufacturer,
+                    m.release_date, m.type, m.generation, m.release_count, m.estimated_value, 
+                    m.cabinet, m.display_type, m.players, m.flippers, m.ramps, m.multiball, 
+                    m.ipdb, m.latest_software
+                FROM machines m
+                LEFT JOIN machine_tags mt ON m.id = mt.machine_id
+                LEFT JOIN tags t ON mt.tag_id = t.id
+                GROUP BY m.id
+                ORDER BY m.name ASC
             ''')
 
             columns = [desc[0] for desc in cursor.description]
@@ -222,13 +252,24 @@ class DBHelper:
         """
         Save a battle result and update player statistics.
         """
-        time = time or datetime.now().isoformat()
+        time = time or datetime.now(ZoneInfo("America/New_York")).isoformat()
 
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
             winner_id = self.get_or_create_player_id(cursor, winner)
             loser_id = self.get_or_create_player_id(cursor, loser)
+
+            # Check if this battle already exists
+            cursor.execute('''
+                SELECT id FROM battles 
+                WHERE winner_id = ? AND loser_id = ? AND battle_time = ?
+            ''', (winner_id, loser_id, time))
+            
+            existing_battle = cursor.fetchone()
+            if existing_battle:
+                # Battle already exists, don't try to save it again
+                return existing_battle[0]
 
             cursor.execute('''
                 INSERT INTO battles (winner_id, loser_id, battle_time)
@@ -237,6 +278,9 @@ class DBHelper:
 
             battle_id = cursor.lastrowid
 
+            # Use a set to track machine IDs we've already added
+            added_machines = set()
+            
             for position, machine in enumerate(machines, 1):
                 # Ensure we have the machine id, try to extract it
                 machine_id = machine.get('id')
@@ -248,12 +292,19 @@ class DBHelper:
                         raise ValueError(f"Could not find machine ID for {machine['name']}")
                     machine_id = result[0]
                 
+                # Skip if we've already added this machine to this battle
+                if machine_id in added_machines:
+                    continue
+                    
                 cursor.execute('''
                     INSERT INTO battle_machines (battle_id, machine_id, position)
                     VALUES (?, ?, ?)
                 ''', (battle_id, machine_id, position))
+                
+                added_machines.add(machine_id)
 
             conn.commit()
+            return battle_id
 
     def get_current_month_data(self) -> Dict:
         """Get current month's contest data with detailed debugging"""
