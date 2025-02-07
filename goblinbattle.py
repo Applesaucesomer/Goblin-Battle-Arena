@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for
 from flask_socketio import SocketIO
 from admin import admin_bp
@@ -606,6 +607,7 @@ if __name__ == '__main__':
     flask_thread.start()
 
     # Run Discord bot
+    # Discord Bot Configuration
     TOKEN = os.getenv("DISCORD_BOT_TOKEN")  # Fetch the token from an environment variable
     if not TOKEN:
         raise ValueError("DISCORD_BOT_TOKEN environment variable is not set")
