@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import random 
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Optional, Tuple
@@ -79,7 +80,8 @@ class DBHelper:
         Args:
         time_filter (str): 
         - 'all_time': Calculate stats from all battles
-        - 'current_month': Calculate stats only for the current month
+        - 'current_month': Calculate stats only for the current month,
+                        and filter out players with no activity
         
         Returns:
         Dict of player statistics
@@ -90,6 +92,7 @@ class DBHelper:
             # Prepare base query with time filtering
             if time_filter == 'current_month':
                 current_month = datetime.now().strftime("%Y-%m")
+                # Simplified query that doesn't rely on the battle_players table
                 query = '''
                     SELECT 
                         p.name, 
@@ -97,11 +100,10 @@ class DBHelper:
                         COUNT(CASE WHEN b.winner_id = p.id THEN 1 END) as total_wins,
                         COUNT(CASE WHEN b.loser_id = p.id THEN 1 END) as total_losses
                     FROM players p
-                    LEFT JOIN battles b ON (
-                        (b.winner_id = p.id OR b.loser_id = p.id) AND 
-                        strftime('%Y-%m', b.battle_time) = ?
-                    )
+                    JOIN battles b ON (b.winner_id = p.id OR b.loser_id = p.id)
+                    WHERE strftime('%Y-%m', b.battle_time) = ?
                     GROUP BY p.id, p.name, p.custom_name
+                    HAVING total_wins > 0 OR total_losses > 0
                     ORDER BY total_wins DESC
                 '''
                 params = (current_month,)
@@ -162,7 +164,7 @@ class DBHelper:
             conn.commit()
 
     def load_battle_history(self) -> List[Dict]:
-        """Load battle history with machine details"""
+        """Load battle history with machine details and all players"""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
@@ -185,6 +187,24 @@ class DBHelper:
             battles = []
             for row in cursor.fetchall():
                 battle_id, winner, loser, time, machine_names, machine_ids = row
+                
+                # Get all players in this battle
+                cursor.execute('''
+                    SELECT p.name, bp.position
+                    FROM battle_players bp
+                    JOIN players p ON bp.player_id = p.id
+                    WHERE bp.battle_id = ?
+                    ORDER BY bp.position
+                ''', (battle_id,))
+                
+                all_players = [{"name": player_name, "position": position} for player_name, position in cursor.fetchall()]
+                
+                # If there are no players in battle_players, just use winner and loser
+                if not all_players:
+                    all_players = [
+                        {"name": winner, "position": 1},
+                        {"name": loser, "position": 2}
+                    ]
                 
                 # Get full machine details
                 machines = []
@@ -229,11 +249,12 @@ class DBHelper:
                     'loser': loser,
                     'time': time,
                     'machines': machines,
-                    'machine_names': machine_names
+                    'machine_names': machine_names,
+                    'all_players': all_players
                 })
             
             return battles
-
+    
     def get_or_create_player_id(self, cursor, player_name: str) -> int:
         """
         Check if a player exists in the database. If not, insert a new player.
@@ -251,6 +272,8 @@ class DBHelper:
     def save_battle(self, winner: str, loser: str, machines: List[Dict], time: str = None):
         """
         Save a battle result and update player statistics.
+        Only the winner gets a win and only the last place player (loser) gets a loss.
+        Players in the middle don't have their stats changed.
         """
         time = time or datetime.now(ZoneInfo("America/New_York")).isoformat()
 
@@ -305,15 +328,38 @@ class DBHelper:
 
             conn.commit()
             return battle_id
+        
+    def add_battle_players(self, battle_id: int, players: List[str], winner: str, loser: str):
+        """
+        Add all players to a battle, including their positions.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            
+            for i, player_name in enumerate(players, 1):
+                player_id = self.get_or_create_player_id(cursor, player_name)
+                
+                # Determine position (1 = winner, len(players) = loser, 0 = middle positions)
+                position = 1 if player_name == winner else len(players) if player_name == loser else 0
+                
+                cursor.execute('''
+                    INSERT INTO battle_players (battle_id, player_id, position)
+                    VALUES (?, ?, ?)
+                ''', (battle_id, player_id, position))
+            
+            conn.commit()
 
     def get_current_month_data(self) -> Dict:
         """Get current month's contest data with detailed debugging"""
         current_month = datetime.now().strftime("%Y-%m")
         
+        # First, ensure there's a machine for the current month
+        selected_machine = self.ensure_current_month_game()
+        
         with self.get_connection() as conn:
             cursor = conn.cursor()
             
-            # First, verify the monthly contests
+            # Now we know there's a monthly contest, so fetch it
             cursor.execute('''
                 SELECT id, month, machine_id 
                 FROM monthly_contests 
@@ -324,7 +370,7 @@ class DBHelper:
             contest_row = cursor.fetchone()
             
             if not contest_row:
-                print("No monthly contest found")
+                print("No monthly contest found (this shouldn't happen after ensure_current_month_game)")
                 return {"month": current_month, "machine_of_the_month": "None", "scores": []}
             
             contest_id, contest_month, machine_id = contest_row
@@ -361,15 +407,13 @@ class DBHelper:
             print(f"Current Month: {contest_month}")
             print(f"Machine of the Month: {machine_name}")
             print(f"Total Scores Found: {len(scores)}")
-            for score in scores:
-                print(f"Player: {score['player']}, Score: {score['score']}")
             
             return {
                 "month": contest_month,
                 "machine_of_the_month": machine_name,
                 "scores": scores
             }
-
+        
     def save_monthly_contest(self, data: Dict):
         """Save or update monthly contest data"""
         with self.get_connection() as conn:
@@ -438,3 +482,57 @@ class DBHelper:
                 print(f"Saving score for {score_entry['player']}: {score_entry['score']}")
             
             conn.commit()
+    
+    #TPG - 03/21/25 - Added functionality to make sure there is always a table of the month in the system
+    def ensure_current_month_game(self):
+        """
+        Check if there's a game for the current month, and if not, 
+        automatically select one from the active machines.
+        """
+        current_month = datetime.now().strftime("%Y-%m")
+        
+        with self.get_connection() as conn:  
+            cursor = conn.cursor()
+            
+            # Check if an entry for the current month exists
+            cursor.execute('''
+                SELECT id, month, machine_id 
+                FROM monthly_contests 
+                WHERE month = ?
+                ORDER BY id DESC 
+                LIMIT 1
+            ''', (current_month,))
+            
+            contest_row = cursor.fetchone()
+            
+            # If no contest for current month, create one
+            if not contest_row:
+                print(f"No game found for {current_month}. Selecting a new Machine of the Month...")
+                
+                # Get a list of active machines
+                active_machines = self.load_machines()  
+                
+                if active_machines:
+                    # Select a random machine from the active ones
+                    selected_machine = random.choice(active_machines)
+                    
+                    # Create a new monthly contest entry
+                    cursor.execute('''
+                        INSERT INTO monthly_contests (month, machine_id)
+                        VALUES (?, ?)
+                    ''', (current_month, selected_machine['id']))
+                    
+                    conn.commit()
+                    
+                    print(f"Selected '{selected_machine['name']}' as the Machine of the Month for {current_month}")
+                    return selected_machine['name']
+                else:
+                    print("No active machines available for selection")
+                    return None
+            else:
+                # Contest exists, get the machine name
+                machine_id = contest_row[2]
+                cursor.execute('SELECT name FROM machines WHERE id = ?', (machine_id,))
+                machine_name = cursor.fetchone()[0]
+                print(f"Found existing Machine of the Month for {current_month}: {machine_name}")
+                return machine_name

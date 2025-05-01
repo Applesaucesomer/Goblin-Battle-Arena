@@ -38,6 +38,8 @@
       text-align: center;
       color: #76c442;
       text-shadow: 2px 2px 4px #000;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
     }
   
     /* Sparkle Animation */
@@ -60,7 +62,7 @@
   
     .sparkle {
       animation: sparkle 2s infinite;
-      font-size: 2rem;
+      font-size: 1.5rem;
       font-weight: bold;
       color: #c1ff72;
       text-shadow:
@@ -68,6 +70,7 @@
         0 0 10px #ff00ff,
         0 0 15px #ff00ff,
         0 0 20px #ff00ff;
+      margin-bottom: 0;
     }
   
     /* Extra Hover Effects */
@@ -90,25 +93,28 @@
       display: flex;
       justify-content: center;
       align-items: center;
-      margin-top: 1rem;
+      margin-top: 0.5rem;
     }
   
     /* Adjustments for Consistency */
     .card-header {
       text-align: center;
       border-bottom: 1px solid #76c442;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
     }
   
     .card {
       background-color: #1d1d1d;
       border: 1px solid #76c442;
-      margin-bottom: 1.5rem;
+      margin-bottom: 0.75rem !important;
     }
   
     .list-group-item {
       background-color: #1d1d1d;
       color: #c1ff72;
       border: none;
+      padding: 0.5rem 1rem;
     }
   
     .list-group-item.bg-dark:hover {
@@ -128,39 +134,87 @@
     .table-dark td {
       background-color: #222;
     }
+    
+    /* Update notification animation */
+    @keyframes highlight {
+      0% { box-shadow: 0 0 5px #76c442; }
+      50% { box-shadow: 0 0 15px #76c442; }
+      100% { box-shadow: 0 0 5px #76c442; }
+    }
+    
+    .section-updated {
+      animation: highlight 2s ease-in-out;
+    }
+    
+    /* TV Screen Optimization Styles */
+    .container.my-5 {
+      margin-top: 0.75rem !important;
+      margin-bottom: 0.75rem !important;
+    }
+    
+    h1.mb-4 {
+      margin-bottom: 0.5rem !important;
+      font-size: 1.8rem;
+    }
+    
+    .table-dark td, .table-dark th {
+      padding: 0.35rem 0.5rem;
+    }
+    
+    .table-dark tr {
+      line-height: 1.1;
+    }
+    
+    .d-flex.justify-content-center.mt-3 {
+      margin-top: 0.5rem !important;
+    }
+    
+    .card-body {
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+    }
+    
+    .form-control {
+      padding: 0.25rem 0.5rem;
+      height: calc(1.5em + 0.5rem + 2px);
+    }
+    
+    tbody tr {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
   </style>  
 </head>
 
 <body>
-  <div class="container my-5">
-    <h1 class="mb-4">Welcome to the Goblin Battle Arena!</h1>
+  <div class="container my-3">
+    <h1 class="mb-2 fs-2">Welcome to the Goblin Battle Arena!</h1>
 
     <!-- Leaderboard Section -->
-    <div class="card bg-dark border-success mb-4">
-      <div class="card-header text-center border-success">
-        <h3>Leaderboard</h3>
-        <div class="d-flex justify-content-center mt-3">
+    <div class="card bg-dark border-success mb-3" id="leaderboard-section">
+      <div class="card-header text-center border-success py-2">
+        <h3 class="fs-4 mb-1">Leaderboard</h3>
+        <div class="d-flex justify-content-center mt-2">
           <input
               type="text"
               id="searchInput"
-              class="form-control w-25 me-2"
+              class="form-control form-control-sm w-25 me-2"
               placeholder="Search by rank or player..."
               onkeyup="filterLeaderboard()"
           />
           <select 
               id="leaderboardTypeSelect" 
-              class="form-control w-25"
+              class="form-control form-control-sm w-25"
           >
-              <option value="all_time">All-Time Stats</option>
               <option value="current_month">Current Month Stats</option>
+              <option value="all_time">All-Time Stats</option>
           </select>
+        </div>
       </div>
-      
-    </div>
-      <div class="card-body">
+      <div class="card-body py-2">
         <div class="table-responsive">
           <table
-            class="table table-dark table-hover table-bordered mb-0"
+            class="table table-dark table-hover table-bordered table-sm mb-0"
             id="leaderboardTable"
           >
             <thead>
@@ -187,23 +241,23 @@
     </div>
 
     <!-- Ongoing Battles -->
-    <div class="card bg-dark border-success mb-4">
-      <div class="card-header text-center border-success">
-        <h3>Ongoing Battles</h3>
+    <div class="card bg-dark border-success mb-3" id="ongoing-battles-section">
+      <div class="card-header text-center border-success py-2">
+        <h3 class="fs-4 mb-1">Ongoing Battles</h3>
       </div>
       <ul class="list-group list-group-flush">
         {% for battle in ongoing_battles %}
-        <li class="list-group-item bg-dark text-center text-light">
-          <div class="sparkle">
-            {{ battle['player1'] }} vs {{ battle['player2'] }}
+        <li class="list-group-item bg-dark text-center text-light py-1">
+          <div class="sparkle m-0">
+            {{ battle['players']|join(' vs ') }}
           </div>
-          <div style="font-size: 1rem; color: #76c442; margin-top: 10px;">
+          <div style="font-size: 0.9rem; color: #76c442; margin-top: 2px;">
             On machines: {{ battle['machine_names'] }}
           </div>
         </li>
         {% endfor %}
         {% if not ongoing_battles %}
-        <li class="list-group-item bg-dark text-center text-light">
+        <li class="list-group-item bg-dark text-center text-light py-2">
           No ongoing battles at the moment.
         </li>
         {% endif %}
@@ -211,40 +265,43 @@
     </div>
 
     <!-- Recent Battles -->
-    <div class="card bg-dark border-success mb-4">
-      <div class="card-header text-center border-success">
-        <h3>Recent Battles</h3>
-        <!-- New Controls for Filtering & Number of Battles -->
-        <div class="d-flex justify-content-center mt-3">
-          <!-- Filter by player name (winner or loser) -->
+    <div class="card bg-dark border-success mb-3" id="recent-battles-section">
+      <div class="card-header text-center border-success py-2">
+        <h3 class="fs-4 mb-1">Recent Battles</h3>
+        <!-- Controls for Filtering & Number of Battles -->
+        <div class="d-flex justify-content-center mt-2">
+          <!-- Filter by player name -->
           <input
             type="text"
             id="battleSearchInput"
-            class="form-control w-25 me-2"
+            class="form-control form-control-sm me-2"
             placeholder="Filter by player..."
             onkeyup="filterRecentBattles()"
+            style="width: 25%;"
           />
           <!-- Change the number of battles displayed -->
           <input
             type="number"
             id="battleCount"
-            class="form-control w-25"
+            class="form-control form-control-sm"
             min="1"
-            value="5"
+            value="10"
             oninput="filterRecentBattles()"
+            style="width: 25%;"
           />
         </div>
       </div>
-      <div class="card-body">
+      <div class="card-body py-2">
         <div class="table-responsive">
           <table
-            class="table table-dark table-hover table-bordered mb-0"
+            class="table table-dark table-hover table-bordered table-sm mb-0"
             id="recentBattlesTable"
           >
             <thead>
               <tr>
                 <th>Winner</th>
-                <th>Loser</th>
+                <th>Last Place</th>
+                <th>Other Players</th>
                 <th>Time</th>
                 <th>Machines Played</th>
               </tr>
@@ -254,13 +311,16 @@
               <tr>
                 <td>{{ battle['winner'] }}</td>
                 <td>{{ battle['loser'] }}</td>
+                <td>
+                  {{ battle.get('all_players', []) | selectattr('name', 'ne', battle['winner']) | selectattr('name', 'ne', battle['loser']) | map(attribute='name') | join(', ') or 'None' }}
+                </td>
                 <td>{{ battle['time'] }}</td>
                 <td>{{ battle['machine_names'] }}</td>
               </tr>
               {% endfor %}
               {% if not battle_history %}
               <tr>
-                <td colspan="4" class="text-center">
+                <td colspan="5" class="text-center">
                   No recent battles found.
                 </td>
               </tr>
@@ -272,13 +332,13 @@
     </div>
 
     <!-- Monthly Table -->
-    <div class="card bg-dark border-success">
-      <div class="card-header text-center border-success">
-        <h3>This Month's Table: {{ machine_of_the_month }}</h3>
+    <div class="card bg-dark border-success" id="monthly-section">
+      <div class="card-header text-center border-success py-2">
+        <h3 class="fs-4 mb-1">This Month's Table: {{ machine_of_the_month }}</h3>
       </div>
-      <div class="card-body">
+      <div class="card-body py-2">
         <div class="table-responsive">
-          <table class="table table-dark table-hover table-bordered mb-0">
+          <table class="table table-dark table-hover table-bordered table-sm mb-0">
             <thead>
               <tr>
                 <th>Rank</th>
@@ -317,9 +377,21 @@
 
   <script>
     const socket = io();
-    // Listen for refresh events
-    socket.on('refresh', () => {
-      location.reload(); // Reload the page
+    
+    // Log connection
+    socket.on('connect', () => {
+      console.log('Connected to Socket.IO server:', socket.id);
+    });
+    
+    // Simply reload the page on ANY refresh event
+    socket.on('refresh', (data) => {
+      console.log('Refresh event received:', data);
+      
+      // Reload the page after a short delay
+      setTimeout(() => {
+        console.log('Reloading page...');
+        window.location.reload();
+      }, 500);
     });
 
     // Simple client-side filter for Leaderboard
@@ -355,18 +427,21 @@
       let filter = searchInput.value.toUpperCase();
 
       let table = document.getElementById('recentBattlesTable');
+      if (!table) return; // Guard against table not being present yet
+      
       let tr = table.getElementsByTagName('tr');
 
-      let maxCount = parseInt(document.getElementById('battleCount').value) || 5;
+      let maxCount = parseInt(document.getElementById('battleCount').value) || 10;
       let visibleCount = 0;
 
       // Skip the header (i=0)
       for (let i = 1; i < tr.length; i++) {
         let tdWinner = tr[i].getElementsByTagName('td')[0];
-        let tdLoser  = tr[i].getElementsByTagName('td')[1];
+        let tdLoser = tr[i].getElementsByTagName('td')[1];
+        let tdOthers = tr[i].getElementsByTagName('td')[2];
 
         // If there's a "No recent battles found." row, handle it separately
-        // that row might have colspan="4"
+        // that row might have colspan="5"
         if (!tdLoser) {
           // Probably the "No recent battles" row
           tr[i].style.display = 'none';
@@ -374,12 +449,14 @@
         }
 
         let winnerText = tdWinner.textContent || tdWinner.innerText;
-        let loserText  = tdLoser.textContent  || tdLoser.innerText;
+        let loserText = tdLoser.textContent || tdLoser.innerText;
+        let othersText = tdOthers.textContent || tdOthers.innerText;
 
         // Check if row matches the filter and we haven't reached maxCount
         if (
           (winnerText.toUpperCase().indexOf(filter) > -1 ||
-           loserText.toUpperCase().indexOf(filter) > -1) &&
+           loserText.toUpperCase().indexOf(filter) > -1 ||
+           othersText.toUpperCase().indexOf(filter) > -1) &&
            visibleCount < maxCount
         ) {
           tr[i].style.display = '';
@@ -391,6 +468,12 @@
     }
 
     // Leaderboard type selection
+    function updateLeaderboardType() {
+      const selectedType = document.getElementById('leaderboardTypeSelect').value;
+      window.location.href = `/?leaderboard_type=${selectedType}`;
+    }
+    
+    // Initialize on page load
     document.addEventListener('DOMContentLoaded', () => {
       // Get the leaderboard type from the URL
       const urlParams = new URLSearchParams(window.location.search);
@@ -398,22 +481,23 @@
       
       if (leaderboardType) {
         const selectElement = document.getElementById('leaderboardTypeSelect');
-        selectElement.value = leaderboardType;
-      }
-
-      function updateLeaderboardType() {
-        const selectedType = document.getElementById('leaderboardTypeSelect').value;
-        window.location.href = `/?leaderboard_type=${selectedType}`;
+        if (selectElement) {
+          selectElement.value = leaderboardType;
+        }
+      } else {
+        // Default to current_month if not specified in URL
+        window.location.href = '/?leaderboard_type=current_month';
       }
 
       // Attach the event listener
-      document.getElementById('leaderboardTypeSelect').addEventListener('change', updateLeaderboardType);
-    });
-
-    // Run once on page load (so the table is limited to 5 by default)
-    document.addEventListener('DOMContentLoaded', () => {
+      const leaderboardTypeSelect = document.getElementById('leaderboardTypeSelect');
+      if (leaderboardTypeSelect) {
+        leaderboardTypeSelect.addEventListener('change', updateLeaderboardType);
+      }
+      
+      // Run filters on page load
       filterRecentBattles();
     });
-</script>
+  </script>
 </body>
 </html>
